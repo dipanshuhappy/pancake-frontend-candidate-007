@@ -27,6 +27,7 @@ import useCatchTxError from 'hooks/useCatchTxError'
 import { useERC20 } from 'hooks/useContract'
 import { useCurrencyUsdPrice } from 'hooks/useCurrencyUsdPrice'
 import useNativeCurrency from 'hooks/useNativeCurrency'
+import { ENS_NAME_REGEX, useGetENSAddressByName } from 'hooks/useGetENSAddressByName'
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { logGTMGiftPreviewEvent } from 'utils/customGTMEventTracking'
@@ -41,6 +42,7 @@ import { useAccount, usePublicClient, useSendTransaction } from 'wagmi'
 import { ActionButton } from './ActionButton'
 import SendTransactionFlow from './SendTransactionFlow'
 import { ViewState } from './type'
+import { CopyAddress } from './WalletCopyButton'
 
 const FormContainer = styled(Box)`
   display: flex;
@@ -59,26 +61,23 @@ const ChainIconWrapper = styled(Box)`
   position: absolute;
   bottom: -4px;
   right: -4px;
-  background: ${({ theme }) => theme.colors.background};
+  background: ${({ theme }) => theme.colors.backgroundAlt};
+  border: 2px solid ${({ theme }) => theme.colors.backgroundAlt};
   border-radius: 50%;
   width: 16px;
   height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 1;
 `
 
-// No longer need these styled components since we're using CurrencyInputPanelSimplify
-
 const AddressInputWrapper = styled(Box)`
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 `
 
 const ClearButton = styled(IconButton)`
-  width: 20px;
-  height: 20px;
+  color: ${({ theme }) => theme.colors.textSubtle};
 `
 
 const ErrorMessage = styled(Text)`
@@ -86,7 +85,7 @@ const ErrorMessage = styled(Text)`
   font-size: 14px;
 `
 
-export interface SendAssetFormProps {
+interface SendAssetFormProps {
   asset: BalanceData
   onViewStateChange: (viewState: ViewState) => void
   viewState: ViewState
@@ -113,6 +112,9 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
   const { fetchWithCatchTxError, loading: attemptingTxn } = useCatchTxError()
   const { includeStarterGas, nativeAmount, isUserInsufficientBalance } = useSendGiftContext()
 
+  // Get resolved ENS address
+  const resolvedEnsAddress = useGetENSAddressByName(debouncedAddress || undefined)
+
   // Get native currency for fee calculation
   const nativeCurrency = useNativeCurrency(asset.chainId)
   const { data: nativeCurrencyPrice } = useCurrencyUsdPrice(nativeCurrency)
@@ -121,13 +123,13 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
       asset.token.address === zeroAddress
         ? nativeCurrency
         : new WrappedTokenInfo({
-            name: asset.token.name,
-            symbol: asset.token.symbol,
-            decimals: asset.token.decimals,
-            address: checksumAddress(asset.token.address as `0x${string}`),
-            chainId: asset.chainId,
-            logoURI: asset.token.logoURI,
-          }),
+          name: asset.token.name,
+          symbol: asset.token.symbol,
+          decimals: asset.token.decimals,
+          address: checksumAddress(asset.token.address as `0x${string}`),
+          chainId: asset.chainId,
+          logoURI: asset.token.logoURI,
+        }),
     [asset, nativeCurrency],
   )
 
@@ -139,7 +141,8 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
   const { sendTransactionAsync } = useSendTransaction()
 
   const estimateTransactionFee = useCallback(async () => {
-    if (!address || !amount || !publicClient || !accountAddress) return
+    const effectiveAddress = resolvedEnsAddress || address
+    if (!effectiveAddress || !amount || !publicClient || !accountAddress) return
 
     try {
       let gasEstimate: bigint = 0n
@@ -164,37 +167,41 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
           })) ?? 0n
       }
 
-      // Get gas price
-      const gasPrice = await publicClient.getGasPrice()
+      const gasPrice = (await publicClient.getGasPrice()) || 0n
 
-      // Calculate fee
+      // Calculate fee in wei
       const fee = gasEstimate * gasPrice
-
-      // Convert to readable format (in native token units)
-      const formattedFee = formatUnits(fee, 18)
-
+      const formattedFee = formatUnits(fee, nativeCurrency.decimals)
       setEstimatedFee(formattedFee)
 
       // Calculate USD value if price is available
       if (nativeCurrencyPrice) {
-        const feeUsd = parseFloat(formattedFee) * nativeCurrencyPrice
-        setEstimatedFeeUsd(feeUsd.toFixed(2))
+        const feeUsd = (parseFloat(formattedFee) * parseFloat(nativeCurrencyPrice.toFixed())).toFixed(2)
+        setEstimatedFeeUsd(feeUsd)
       } else {
         setEstimatedFeeUsd(null)
       }
     } catch (error) {
-      console.error('Error estimating fee:', error)
+      console.error('Fee estimation failed:', error)
       setEstimatedFee(null)
       setEstimatedFeeUsd(null)
     }
-  }, [address, amount, publicClient, accountAddress, isNativeToken, currency, nativeCurrencyPrice, erc20Contract])
+  }, [resolvedEnsAddress, address, amount, publicClient, accountAddress, isNativeToken, erc20Contract, currency, asset.token.address, nativeCurrency.decimals, nativeCurrencyPrice])
 
   const sendAsset = useCallback(async () => {
-    const amounts = tryParseAmount(amount, currency)
+    const effectiveAddress = resolvedEnsAddress || address
+    if (!effectiveAddress || !amount) return
 
-    const receipt = await fetchWithCatchTxError(async () => {
-      if (isNativeToken) {
-        // Handle native token transfer
+    const amounts = tryParseAmount(amount, currency)
+    try {
+      const receipt = await fetchWithCatchTxError(() => {
+        if (isNativeToken) {
+          return sendTransactionAsync({
+            to: effectiveAddress as `0x${string}`,
+            value: amounts?.quotient ? BigInt(amounts.quotient.toString()) : 0n,
+            chainId: asset.chainId,
+          })
+        }
         return sendTransactionAsync({
           to: address as `0x${string}`,
           value: amounts?.quotient ?? 0n,
@@ -226,31 +233,45 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
 
     return receipt
   }, [
+    resolvedEnsAddress,
     address,
     amount,
-    erc20Contract,
+    currency,
+    fetchWithCatchTxError,
     isNativeToken,
     sendTransactionAsync,
     asset.chainId,
-    fetchWithCatchTxError,
-    t,
+    asset.token.address,
+    accountAddress,
+    publicClient?.chain,
+    erc20Contract,
+    setTxHash,
     toastSuccess,
-    currency,
+    t,
   ])
 
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target
-    setAddress(value)
+    if (isAddress(value)) {
+      setAddress(value)
+    }
+    else if (ENS_NAME_REGEX.test(value) && resolvedEnsAddress) {
+      setAddress(resolvedEnsAddress.toString())
+    }
+    else if (ENS_NAME_REGEX.test(value) && !resolvedEnsAddress) {
+      setAddressError(t('ENS name not resolved'))
+    }
   }
 
   // Use debounced address for validation to avoid checking on every keystroke
   useEffect(() => {
-    if (debouncedAddress && !isAddress(debouncedAddress)) {
+    const effectiveAddress = resolvedEnsAddress || debouncedAddress
+    if (debouncedAddress && !resolvedEnsAddress && !isAddress(debouncedAddress)) {
       setAddressError(t('Invalid wallet address'))
     } else {
       setAddressError('')
     }
-  }, [debouncedAddress, t])
+  }, [debouncedAddress, resolvedEnsAddress, t])
 
   const handleClearAddress = () => {
     setAddress('')
@@ -301,28 +322,31 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
 
   // Effect to estimate fee when address and amount are valid
   useEffect(() => {
-    if (address && amount && !addressError) {
+    const effectiveAddress = resolvedEnsAddress || address
+    if (effectiveAddress && amount && !addressError) {
       estimateTransactionFee()
     } else {
       setEstimatedFee(null)
     }
-  }, [address, amount, addressError, estimateTransactionFee])
+  }, [resolvedEnsAddress, address, amount, addressError, estimateTransactionFee])
 
   const isValidAddress = useMemo(() => {
+    const effectiveAddress = resolvedEnsAddress || address
     // send gift doesn't need to check address
-    return isSendGiftSupported ? true : address && !addressError
-  }, [address, addressError, isSendGiftSupported])
+    return isSendGiftSupported ? true : effectiveAddress && !addressError
+  }, [resolvedEnsAddress, address, addressError, isSendGiftSupported])
 
   if (viewState === ViewState.CONFIRM_TRANSACTION && isSendGiftSupported) {
     return <CreateGiftView key={viewState} tokenAmount={tokenAmount} />
   }
 
   if (viewState >= ViewState.CONFIRM_TRANSACTION) {
+    const effectiveAddress = resolvedEnsAddress || address
     return (
       <SendTransactionFlow
         asset={asset}
         amount={amount}
-        recipient={address as string}
+        recipient={effectiveAddress as string}
         onDismiss={() => {
           onViewStateChange(ViewState.SEND_ASSETS)
           setTxHash(undefined)
@@ -358,7 +382,7 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
                     <Input
                       value={address ?? ''}
                       onChange={handleAddressChange}
-                      placeholder="Recipient address"
+                      placeholder="Recipient address or ENS name"
                       style={{ height: '64px' }}
                       isError={Boolean(addressError)}
                     />
@@ -375,6 +399,10 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
                   </Box>
                 </AddressInputWrapper>
                 {addressError && <ErrorMessage>{addressError}</ErrorMessage>}
+                {resolvedEnsAddress && address && (
+                  <CopyAddress account={resolvedEnsAddress} tooltipMessage={resolvedEnsAddress} enableDomainName />
+
+                )}
               </Box>
             )}
 

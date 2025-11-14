@@ -6,7 +6,7 @@ import { useEnsAddress } from 'wagmi'
 
 const ENS_SUPPORT_CHAIN_IDS = CHAINS.filter((c) => c?.contracts && c.contracts?.ensUniversalResolver).map((c) => c.id)
 
-const ENS_NAME_REGEX = /^[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&/=]*)?$/
+export const ENS_NAME_REGEX = /^[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&/=]*)?$/
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 
@@ -23,7 +23,7 @@ export const useGetENSAddressByName = (ensNameOrAddress?: string) => {
       enabled:
         typeof ensNameOrAddress !== 'undefined' &&
         (ENS_NAME_REGEX.test(ensNameOrAddress) || ADDRESS_REGEX.test(ensNameOrAddress)) &&
-        chainId !== ChainId.BSC &&
+        // chainId !== ChainId.BSC &&
         chainId !== ChainId.BSC_TESTNET &&
         ensSupported,
     },
