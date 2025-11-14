@@ -214,7 +214,7 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
         });
         return sendTransactionAsync({
           account: accountAddress,
-          chain: asset.chain,
+          chain: asset.chainId,
           to: asset.token.address as `0x${string}`,
           data: transferData
         })
