@@ -17,7 +17,7 @@ import {
   domAnimation,
   useToast,
 } from '@pancakeswap/uikit'
-import { erc20Abi } from 'viem/_types/constants/abis'
+import { erc20Abi } from 'viem/constants/abis'
 import tryParseAmount from '@pancakeswap/utils/tryParseAmount'
 import { SwapUIV2 } from '@pancakeswap/widgets-internal'
 import CurrencyLogo from 'components/Logo/CurrencyLogo'

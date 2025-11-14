@@ -24,6 +24,7 @@ import { useSwitchNetwork } from 'hooks/useSwitchNetwork'
 import { useCallback, useMemo } from 'react'
 import { styled } from 'styled-components'
 import { getBlockExploreLink, getBlockExploreName } from 'utils'
+import { CopyAddress } from './WalletCopyButton'
 
 const Wrapper = styled.div`
   width: 100%;
@@ -78,8 +79,6 @@ export function ConfirmTransactionContent({
   const nativeCurrency = useNativeCurrency(asset.chainId)
   const { switchNetworkAsync } = useSwitchNetwork()
 
-  const price = asset.price?.usd ?? 0
-
   const tokenAmount = useMemo(() => {
     const currency = new Token(
       asset.chainId,
@@ -111,6 +110,9 @@ export function ConfirmTransactionContent({
             <Box maxWidth="70%" style={{ wordBreak: 'break-all', textAlign: 'right' }}>
               <Text>{recipient}</Text>
             </Box>
+          </Flex>
+          <Flex justifyContent="flex-end" width="100%" mb="8px" alignItems="flex-end">
+            <CopyAddress account={recipient} tooltipMessage={recipient} enableDomainName />
           </Flex>
 
           <Flex justifyContent="space-between" width="100%" mb="8px" alignItems="center">
