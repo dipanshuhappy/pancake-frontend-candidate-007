@@ -10,10 +10,12 @@ import { useMemo } from 'react'
 import { styled } from 'styled-components'
 import { Connector, useAccount, useConnect } from 'wagmi'
 import { useSocialLoginProviderAtom } from '../../contexts/Privy/atom'
+import { useDomainNameForAddress } from 'hooks/useDomain'
 
 interface CopyAddressProps extends FlexProps {
   account: string | undefined
-  tooltipMessage: string
+  tooltipMessage: string,
+  enableDomainName?: boolean
 }
 
 const Wrapper = styled(Flex)`
@@ -128,6 +130,7 @@ const SOCIAL_LOGIN_ICONS = {
 export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = ({
   account,
   tooltipMessage,
+  enableDomainName,
   ...props
 }) => {
   const { connectAsync } = useConnect()
@@ -141,10 +144,14 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
 
   const wallet = useMemo(() => walletConfig.find((w) => w.id === previouslyUsedWalletsId[0]), [walletConfig])
   const { dappIcon } = useDappIcon()
+  const { avatar, domainName } = useDomainNameForAddress(account || '', enableDomainName);
 
   const socialIcon = useMemo(() => {
     return socialProvider && isSmartAccount ? SOCIAL_LOGIN_ICONS[socialProvider] : null
   }, [socialProvider, isSmartAccount])
+  const avatarIcon = useMemo(() => {
+    return avatar && enableDomainName ? avatar : null
+  }, [avatar, enableDomainName])
 
   const needsWhiteBackground = useMemo(() => {
     return Boolean(socialProvider && isSmartAccount && ['x', 'discord', 'telegram'].includes(socialProvider))
@@ -155,6 +162,21 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
     if (!address) return ''
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
   }
+  const displayText = useMemo(() => {
+    if (enableDomainName && domainName) {
+      return domainName
+    }
+    return formatAddress(account)
+  }, [enableDomainName, domainName, account])
+  const secondaryText = useMemo(() => {
+    if (enableDomainName && domainName) {
+      return formatAddress(account)
+    }
+    return null
+  }, [enableDomainName, domainName, account])
+
+
+
 
   return (
     <Box position="relative" {...props} onClick={(e) => e.stopPropagation()}>
@@ -164,16 +186,24 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
             <SocialIconWrapper $needsWhiteBg={needsWhiteBackground}>
               <Image src={socialIcon} width={32} height={32} alt="Social Login" />
             </SocialIconWrapper>
-          ) : wallet?.icon ? (
-            <Image src={wallet?.icon as string} width={40} height={40} alt="Wallet" />
-          ) : dappIcon ? (
-            <Image src={dappIcon} width={40} height={40} alt="Wallet" />
-          ) : (
-            <WalletFilledV2Icon width={28} height={28} color="primary" />
-          )}
+          ) :
+            avatarIcon ? (
+              <Image src={avatarIcon} width={40} height={40} alt="Avatar" />
+            ) : wallet?.icon ? (
+              <Image src={wallet?.icon as string} width={40} height={40} alt="Wallet" />
+            ) : dappIcon ? (
+              <Image src={dappIcon} width={40} height={40} alt="Wallet" />
+            ) : (
+              <WalletFilledV2Icon width={28} height={28} color="primary" />
+            )}
         </WalletIcon>
         <AddressBox>
-          <WalletAddress title={account}>{formatAddress(account)}</WalletAddress>
+          <WalletAddress title={account}>{displayText}</WalletAddress>
+          {secondaryText && (
+            <Text fontSize="12px" color="textSubtle" style={{ marginTop: '2px' }}>
+              {secondaryText}
+            </Text>
+          )}
         </AddressBox>
         <CopyButtonWrapper>
           <CopyButton width="16px" text={account ?? ''} tooltipMessage={tooltipMessage} />

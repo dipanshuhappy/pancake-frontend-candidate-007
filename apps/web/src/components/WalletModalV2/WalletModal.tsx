@@ -205,7 +205,7 @@ export const WalletContent = ({
             </Button>
           )}
 
-          <CopyAddress tooltipMessage={t('Copied')} account={account || ''} />
+          <CopyAddress tooltipMessage={t('Copied')} account={account || ''} enableDomainName />
           {viewState <= ViewState.SEND_ASSETS && (
             <FlexGap>
               <DisconnectButton scale="xs" onClick={onDisconnect}>
