@@ -1,7 +1,7 @@
 import { ChainId, getChainName } from '@pancakeswap/chains'
 import { useDebounce } from '@pancakeswap/hooks'
 import { useTranslation } from '@pancakeswap/localization'
-import { Percent } from '@pancakeswap/sdk'
+import { erc20Abi, Percent } from '@pancakeswap/sdk'
 import { WrappedTokenInfo } from '@pancakeswap/token-lists'
 import {
   AutoRenewIcon,
@@ -17,7 +17,7 @@ import {
   domAnimation,
   useToast,
 } from '@pancakeswap/uikit'
-import { erc20Abi } from 'viem/constants/abis'
+
 import tryParseAmount from '@pancakeswap/utils/tryParseAmount'
 import { SwapUIV2 } from '@pancakeswap/widgets-internal'
 import CurrencyLogo from 'components/Logo/CurrencyLogo'
