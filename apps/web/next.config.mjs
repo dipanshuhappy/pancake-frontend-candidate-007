@@ -22,6 +22,7 @@ const withVanillaExtract = createVanillaExtractPlugin()
 const sentryWebpackPluginOptions =
   process.env.VERCEL_ENV === 'production'
     ? {
+      telemetry: false,
       // Additional config options for the Sentry Webpack plugin. Keep in mind that
       // the following options are set automatically, and overriding them is not
       // recommended:
@@ -35,6 +36,7 @@ const sentryWebpackPluginOptions =
       // https://github.com/getsentry/sentry-webpack-plugin#options.
     }
     : {
+      telemetry: false,
       hideSourceMaps: false,
       silent: true, // Suppresses all logs
       dryRun: !process.env.SENTRY_AUTH_TOKEN,
@@ -55,6 +57,8 @@ const config = {
     ignoreDuringBuilds: true,
 
   },
+
+
   compiler: {
     styledComponents: true,
   },
