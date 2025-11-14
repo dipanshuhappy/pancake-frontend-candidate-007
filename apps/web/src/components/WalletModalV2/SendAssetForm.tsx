@@ -1,7 +1,7 @@
 import { ChainId, getChainName } from '@pancakeswap/chains'
 import { useDebounce } from '@pancakeswap/hooks'
 import { useTranslation } from '@pancakeswap/localization'
-import { erc20Abi, Percent } from '@pancakeswap/sdk'
+import { Percent } from '@pancakeswap/sdk'
 import { WrappedTokenInfo } from '@pancakeswap/token-lists'
 import {
   AutoRenewIcon,
@@ -17,7 +17,6 @@ import {
   domAnimation,
   useToast,
 } from '@pancakeswap/uikit'
-
 import tryParseAmount from '@pancakeswap/utils/tryParseAmount'
 import { SwapUIV2 } from '@pancakeswap/widgets-internal'
 import CurrencyLogo from 'components/Logo/CurrencyLogo'
@@ -28,21 +27,23 @@ import useCatchTxError from 'hooks/useCatchTxError'
 import { useERC20 } from 'hooks/useContract'
 import { useCurrencyUsdPrice } from 'hooks/useCurrencyUsdPrice'
 import useNativeCurrency from 'hooks/useNativeCurrency'
-import { useGetENSAddressByName } from 'hooks/useGetENSAddressByName'
+
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { logGTMGiftPreviewEvent } from 'utils/customGTMEventTracking'
 import { maxAmountSpend } from 'utils/maxAmountSpend'
-import { checksumAddress, formatUnits, isAddress, zeroAddress, encodeFunctionData } from 'viem'
+import { checksumAddress, formatUnits, isAddress, zeroAddress } from 'viem'
 import { CreateGiftView } from 'views/Gift/components/CreateGiftView'
 import { SendGiftToggle } from 'views/Gift/components/SendGiftToggle'
 import { CHAINS_WITH_GIFT_CLAIM } from 'views/Gift/constants'
 import { SendGiftContext, useSendGiftContext } from 'views/Gift/providers/SendGiftProvider'
 import { useUserInsufficientBalanceLight } from 'views/SwapSimplify/hooks/useUserInsufficientBalance'
-import { useAccount, usePublicClient, useSendTransaction } from 'wagmi'
+import { useAccount, useEnsAddress, usePublicClient, useSendTransaction } from 'wagmi'
 import { ActionButton } from './ActionButton'
 import SendTransactionFlow from './SendTransactionFlow'
 import { ViewState } from './type'
+import { useDomainNameForAddress } from 'hooks/useDomain'
+import { useGetENSAddressByName } from 'hooks/useGetENSAddressByName'
 import { CopyAddress } from './WalletCopyButton'
 
 const FormContainer = styled(Box)`
@@ -113,8 +114,8 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
   const { fetchWithCatchTxError, loading: attemptingTxn } = useCatchTxError()
   const { includeStarterGas, nativeAmount, isUserInsufficientBalance } = useSendGiftContext()
 
-  // Get resolved ENS address
-  const resolvedEnsAddress = useGetENSAddressByName(debouncedAddress || undefined)
+  // Get resolved ENS address using wagmi
+  const resolvedEnsAddress = useGetENSAddressByName(debouncedAddress?.includes('.') ? debouncedAddress : undefined)
 
   // Get native currency for fee calculation
   const nativeCurrency = useNativeCurrency(asset.chainId)
@@ -124,13 +125,13 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
       asset.token.address === zeroAddress
         ? nativeCurrency
         : new WrappedTokenInfo({
-            name: asset.token.name,
-            symbol: asset.token.symbol,
-            decimals: asset.token.decimals,
-            address: checksumAddress(asset.token.address as `0x${string}`),
-            chainId: asset.chainId,
-            logoURI: asset.token.logoURI,
-          }),
+          name: asset.token.name,
+          symbol: asset.token.symbol,
+          decimals: asset.token.decimals,
+          address: checksumAddress(asset.token.address as `0x${string}`),
+          chainId: asset.chainId,
+          logoURI: asset.token.logoURI,
+        }),
     [asset, nativeCurrency],
   )
 
@@ -150,27 +151,27 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
 
       if (isNativeToken) {
         // For native token, estimate gas for a simple transfer
-        gasEstimate = await publicClient.estimateGas({
-          account: accountAddress,
-          to: effectiveAddress as `0x${string}`,
-          value: tryParseAmount(amount, currency)?.quotient ?? 0n,
-        })
+        gasEstimate =
+          (await publicClient.estimateGas({
+            account: accountAddress,
+            to: effectiveAddress as `0x${string}`,
+            value: BigInt(formatUnits(tryParseAmount(amount, currency)?.quotient ?? 0n, 0)),
+          })) || 21000n
       } else {
         // For ERC20 tokens, estimate gas for transfer call
-
-        const transferData = encodeFunctionData({
-          abi: erc20Abi,
-          functionName: 'transfer',
-          args: [effectiveAddress as `0x${string}`, tryParseAmount(amount, currency)?.quotient ?? 0n],
-        })
-        gasEstimate = await publicClient.estimateGas({
-          account: accountAddress,
-          to: asset.token.address as `0x${string}`,
-          data: transferData as `0x${string}`,
-        })
+        const transferData = erc20Contract?.interface.encodeFunctionData('transfer', [
+          effectiveAddress,
+          tryParseAmount(amount, currency)?.quotient.toString(),
+        ])
+        gasEstimate =
+          (await publicClient.estimateGas({
+            account: accountAddress,
+            to: asset.token.address as `0x${string}`,
+            data: transferData as `0x${string}`,
+          })) || 65000n
       }
 
-      const gasPrice = await publicClient.getGasPrice()
+      const gasPrice = (await publicClient.getGasPrice()) || 0n
 
       // Calculate fee in wei
       const fee = gasEstimate * gasPrice
@@ -189,19 +190,7 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
       setEstimatedFee(null)
       setEstimatedFeeUsd(null)
     }
-  }, [
-    resolvedEnsAddress,
-    address,
-    amount,
-    publicClient,
-    accountAddress,
-    isNativeToken,
-    erc20Contract,
-    currency,
-    asset.token.address,
-    nativeCurrency.decimals,
-    nativeCurrencyPrice,
-  ])
+  }, [resolvedEnsAddress, address, amount, publicClient, accountAddress, isNativeToken, erc20Contract, currency, asset.token.address, nativeCurrency.decimals, nativeCurrencyPrice])
 
   const sendAsset = useCallback(async () => {
     const effectiveAddress = resolvedEnsAddress || address
@@ -217,16 +206,14 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
             chainId: asset.chainId,
           })
         }
-        const transferData = encodeFunctionData({
-          abi: erc20Abi,
-          functionName: 'transfer',
-          args: [effectiveAddress as `0x${string}`, tryParseAmount(amount, currency)?.quotient ?? 0n],
-        })
         return sendTransactionAsync({
-          to: address as `0x${string}`,
-          value: amounts?.quotient ?? 0n,
-          chainId: asset.chainId,
-          data: transferData,
+          account: accountAddress,
+          chain: publicClient?.chain,
+          to: asset.token.address as `0x${string}`,
+          data: erc20Contract?.interface.encodeFunctionData('transfer', [
+            effectiveAddress,
+            amounts?.quotient.toString(),
+          ]) as `0x${string}`,
         })
       })
 
@@ -238,9 +225,7 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
             {t('Sent')} {amount} {currency.symbol} {t('to')} {effectiveAddress}
           </ToastDescriptionWithTx>,
         )
-        // Reset form after successful transaction
-        setAmount('')
-        setAddress('')
+        return receipt
       }
     } catch (error) {
       console.error('Send failed:', error)

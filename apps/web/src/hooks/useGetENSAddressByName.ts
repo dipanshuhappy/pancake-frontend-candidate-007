@@ -18,7 +18,7 @@ export const useGetENSAddressByName = (ensNameOrAddress?: string) => {
   )
   const { data: recipientENSAddress } = useEnsAddress({
     name: ensNameOrAddress,
-    chainId,
+    chainId: 1,
     query: {
       enabled:
         typeof ensNameOrAddress !== 'undefined' &&

@@ -4,7 +4,7 @@ import { useSidNameForAddress } from 'hooks/useSid'
 import { useUnsNameForAddress } from 'hooks/useUns'
 import { useMemo } from 'react'
 import { Address } from 'viem'
-import { useEnsAvatar, useEnsName } from 'wagmi'
+import { useEnsAvatar, useEnsName, useEnsText } from 'wagmi'
 
 export const useDomainNameForAddress = (address?: `0x${string}` | string, fetchData = true) => {
   const { chainId } = useActiveChainId()
@@ -28,12 +28,32 @@ export const useDomainNameForAddress = (address?: `0x${string}` | string, fetchD
     },
   })
 
+  const { data: ensTwitter, isLoading: isEnsTwitterLoading } = useEnsText({
+    name: ensName as string,
+    chainId: chainId === ChainId.GOERLI ? ChainId.GOERLI : ChainId.ETHEREUM,
+    query: {
+      enabled: chainId !== ChainId.BSC_TESTNET && !!ensName && fetchData,
+    },
+    key: 'com.twitter'
+  })
+
+  const { data: ensGithub, isLoading: isEnsGithubLoading } = useEnsText({
+    name: ensName as string,
+    chainId: chainId === ChainId.GOERLI ? ChainId.GOERLI : ChainId.ETHEREUM,
+    query: {
+      enabled: chainId !== ChainId.BSC_TESTNET && !!ensName && fetchData,
+    },
+    key: 'com.github'
+  })
+
 
   return useMemo(() => {
     return {
       domainName: ensName || sidName || unsName,
       avatar: ensAvatar ?? undefined,
-      isLoading: isEnsLoading || isEnsAvatarLoading || (!ensName && isSidLoading) || (!sidName && isUnsLoading),
+      twitter: ensTwitter ?? undefined,
+      github: ensGithub ?? undefined,
+      isLoading: isEnsLoading || isEnsAvatarLoading || isEnsTwitterLoading || isEnsGithubLoading || (!ensName && isSidLoading) || (!sidName && isUnsLoading),
     }
-  }, [sidName, unsName, isSidLoading, isUnsLoading, ensName, isEnsLoading, ensAvatar, isEnsAvatarLoading])
+  }, [sidName, unsName, isSidLoading, isUnsLoading, ensName, isEnsLoading, ensAvatar, isEnsAvatarLoading, ensTwitter, isEnsTwitterLoading, ensGithub, isEnsGithubLoading])
 }

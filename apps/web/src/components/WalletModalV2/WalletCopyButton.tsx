@@ -144,7 +144,7 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
 
   const wallet = useMemo(() => walletConfig.find((w) => w.id === previouslyUsedWalletsId[0]), [walletConfig])
   const { dappIcon } = useDappIcon()
-  const { avatar, domainName } = useDomainNameForAddress(account || '', enableDomainName)
+  const { avatar, domainName, twitter, github } = useDomainNameForAddress(account || '', enableDomainName)
 
   const socialIcon = useMemo(() => {
     return socialProvider && isSmartAccount ? SOCIAL_LOGIN_ICONS[socialProvider] : null
@@ -199,6 +199,36 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
             <Text fontSize="12px" color="textSubtle" style={{ marginTop: '2px' }}>
               {secondaryText}
             </Text>
+          )}
+          {enableDomainName && (twitter || github) && (
+            <Flex style={{ marginTop: '4px' }}>
+              {twitter && (
+                <Text
+                  fontSize="11px"
+                  color="primary"
+                  as="a"
+                  href={`https://twitter.com/${twitter.replace('@', '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none', marginRight: github ? '8px' : '0' }}
+                >
+                  @{twitter.replace('@', '')}
+                </Text>
+              )}
+              {github && (
+                <Text
+                  fontSize="11px"
+                  color="primary"
+                  as="a"
+                  href={`https://github.com/${github.replace('@', '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none' }}
+                >
+                  github.com/{github.replace('@', '')}
+                </Text>
+              )}
+            </Flex>
           )}
         </AddressBox>
         <CopyButtonWrapper>
