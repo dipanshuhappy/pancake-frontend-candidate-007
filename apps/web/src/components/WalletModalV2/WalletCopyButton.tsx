@@ -5,16 +5,16 @@ import { ASSET_CDN } from 'config/constants/endpoints'
 import { walletsConfig } from 'config/wallet'
 import { useActiveChainId } from 'hooks/useActiveChainId'
 import { useIsSmartAccount } from 'hooks/useIsSmartAccount'
+import { useDomainNameForAddress } from 'hooks/useDomain'
 import { useAtom } from 'jotai'
 import { useMemo } from 'react'
 import { styled } from 'styled-components'
 import { Connector, useAccount, useConnect } from 'wagmi'
 import { useSocialLoginProviderAtom } from '../../contexts/Privy/atom'
-import { useDomainNameForAddress } from 'hooks/useDomain'
 
 interface CopyAddressProps extends FlexProps {
   account: string | undefined
-  tooltipMessage: string,
+  tooltipMessage: string
   enableDomainName?: boolean
 }
 
@@ -144,7 +144,7 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
 
   const wallet = useMemo(() => walletConfig.find((w) => w.id === previouslyUsedWalletsId[0]), [walletConfig])
   const { dappIcon } = useDappIcon()
-  const { avatar, domainName } = useDomainNameForAddress(account || '', enableDomainName);
+  const { avatar, domainName } = useDomainNameForAddress(account || '', enableDomainName)
 
   const socialIcon = useMemo(() => {
     return socialProvider && isSmartAccount ? SOCIAL_LOGIN_ICONS[socialProvider] : null
@@ -175,9 +175,6 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
     return null
   }, [enableDomainName, domainName, account])
 
-
-
-
   return (
     <Box position="relative" {...props} onClick={(e) => e.stopPropagation()}>
       <Wrapper>
@@ -186,16 +183,15 @@ export const CopyAddress: React.FC<React.PropsWithChildren<CopyAddressProps>> = 
             <SocialIconWrapper $needsWhiteBg={needsWhiteBackground}>
               <Image src={socialIcon} width={32} height={32} alt="Social Login" />
             </SocialIconWrapper>
-          ) :
-            avatarIcon ? (
-              <Image src={avatarIcon} width={40} height={40} alt="Avatar" />
-            ) : wallet?.icon ? (
-              <Image src={wallet?.icon as string} width={40} height={40} alt="Wallet" />
-            ) : dappIcon ? (
-              <Image src={dappIcon} width={40} height={40} alt="Wallet" />
-            ) : (
-              <WalletFilledV2Icon width={28} height={28} color="primary" />
-            )}
+          ) : avatarIcon ? (
+            <Image src={avatarIcon} width={40} height={40} alt="Avatar" />
+          ) : wallet?.icon ? (
+            <Image src={wallet?.icon as string} width={40} height={40} alt="Wallet" />
+          ) : dappIcon ? (
+            <Image src={dappIcon} width={40} height={40} alt="Wallet" />
+          ) : (
+            <WalletFilledV2Icon width={28} height={28} color="primary" />
+          )}
         </WalletIcon>
         <AddressBox>
           <WalletAddress title={account}>{displayText}</WalletAddress>
