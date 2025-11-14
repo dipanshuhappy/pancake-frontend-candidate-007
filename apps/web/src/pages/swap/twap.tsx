@@ -6,7 +6,6 @@ import { CHAIN_IDS } from 'utils/wagmi'
 import { useIsSmartAccount } from 'hooks/useIsSmartAccount'
 import Page from 'views/Page'
 import SwapLayout from 'views/Swap/SwapLayout'
-import TwapAndLimitSwap from 'views/Swap/Twap/TwapSwap'
 
 const Layout: React.FC<React.PropsWithChildren> = ({ children }) => {
   return (
@@ -16,7 +15,7 @@ const Layout: React.FC<React.PropsWithChildren> = ({ children }) => {
   )
 }
 
-// const TwapAndLimitSwap = dynamic(() => import('views/Swap/Twap/TwapSwap'), { ssr: false })
+const TwapAndLimitSwap = dynamic(() => import('views/Swap/Twap/TwapSwap'), { ssr: false })
 
 const TwapView = () => {
   const router = useRouter()
