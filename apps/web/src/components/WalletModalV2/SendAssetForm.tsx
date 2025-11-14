@@ -17,6 +17,7 @@ import {
   domAnimation,
   useToast,
 } from '@pancakeswap/uikit'
+import { erc20Abi } from 'viem/_types/constants/abis'
 import tryParseAmount from '@pancakeswap/utils/tryParseAmount'
 import { SwapUIV2 } from '@pancakeswap/widgets-internal'
 import CurrencyLogo from 'components/Logo/CurrencyLogo'
@@ -27,12 +28,12 @@ import useCatchTxError from 'hooks/useCatchTxError'
 import { useERC20 } from 'hooks/useContract'
 import { useCurrencyUsdPrice } from 'hooks/useCurrencyUsdPrice'
 import useNativeCurrency from 'hooks/useNativeCurrency'
-import { ENS_NAME_REGEX, useGetENSAddressByName } from 'hooks/useGetENSAddressByName'
+import { useGetENSAddressByName } from 'hooks/useGetENSAddressByName'
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { logGTMGiftPreviewEvent } from 'utils/customGTMEventTracking'
 import { maxAmountSpend } from 'utils/maxAmountSpend'
-import { checksumAddress, formatUnits, isAddress, zeroAddress } from 'viem'
+import { checksumAddress, formatUnits, isAddress, zeroAddress, encodeFunctionData } from 'viem'
 import { CreateGiftView } from 'views/Gift/components/CreateGiftView'
 import { SendGiftToggle } from 'views/Gift/components/SendGiftToggle'
 import { CHAINS_WITH_GIFT_CLAIM } from 'views/Gift/constants'
@@ -123,13 +124,13 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
       asset.token.address === zeroAddress
         ? nativeCurrency
         : new WrappedTokenInfo({
-          name: asset.token.name,
-          symbol: asset.token.symbol,
-          decimals: asset.token.decimals,
-          address: checksumAddress(asset.token.address as `0x${string}`),
-          chainId: asset.chainId,
-          logoURI: asset.token.logoURI,
-        }),
+            name: asset.token.name,
+            symbol: asset.token.symbol,
+            decimals: asset.token.decimals,
+            address: checksumAddress(asset.token.address as `0x${string}`),
+            chainId: asset.chainId,
+            logoURI: asset.token.logoURI,
+          }),
     [asset, nativeCurrency],
   )
 
@@ -149,25 +150,27 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
 
       if (isNativeToken) {
         // For native token, estimate gas for a simple transfer
-        gasEstimate =
-          (await publicClient.estimateGas({
-            account: accountAddress,
-            to: address as `0x${string}`,
-            value: tryParseAmount(amount, currency)?.quotient ?? 0n,
-          })) ?? 0n
+        gasEstimate = await publicClient.estimateGas({
+          account: accountAddress,
+          to: effectiveAddress as `0x${string}`,
+          value: tryParseAmount(amount, currency)?.quotient ?? 0n,
+        })
       } else {
-        // For ERC20 tokens, estimate gas for a transfer call
-        const transferData = {
-          to: address as `0x${string}`,
-          amount: tryParseAmount(amount, currency)?.quotient ?? 0n,
-        }
-        gasEstimate =
-          (await erc20Contract?.estimateGas?.transfer([transferData.to, transferData.amount], {
-            account: erc20Contract.account!,
-          })) ?? 0n
+        // For ERC20 tokens, estimate gas for transfer call
+
+        const transferData = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: 'transfer',
+          args: [effectiveAddress as `0x${string}`, tryParseAmount(amount, currency)?.quotient ?? 0n],
+        })
+        gasEstimate = await publicClient.estimateGas({
+          account: accountAddress,
+          to: asset.token.address as `0x${string}`,
+          data: transferData as `0x${string}`,
+        })
       }
 
-      const gasPrice = (await publicClient.getGasPrice()) || 0n
+      const gasPrice = await publicClient.getGasPrice()
 
       // Calculate fee in wei
       const fee = gasEstimate * gasPrice
@@ -186,7 +189,19 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
       setEstimatedFee(null)
       setEstimatedFeeUsd(null)
     }
-  }, [resolvedEnsAddress, address, amount, publicClient, accountAddress, isNativeToken, erc20Contract, currency, asset.token.address, nativeCurrency.decimals, nativeCurrencyPrice])
+  }, [
+    resolvedEnsAddress,
+    address,
+    amount,
+    publicClient,
+    accountAddress,
+    isNativeToken,
+    erc20Contract,
+    currency,
+    asset.token.address,
+    nativeCurrency.decimals,
+    nativeCurrencyPrice,
+  ])
 
   const sendAsset = useCallback(async () => {
     const effectiveAddress = resolvedEnsAddress || address
@@ -202,36 +217,34 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
             chainId: asset.chainId,
           })
         }
+        const transferData = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: 'transfer',
+          args: [effectiveAddress as `0x${string}`, tryParseAmount(amount, currency)?.quotient ?? 0n],
+        })
         return sendTransactionAsync({
           to: address as `0x${string}`,
           value: amounts?.quotient ?? 0n,
           chainId: asset.chainId,
+          data: transferData,
         })
-      }
-      // Handle ERC20 token transfer
-      return erc20Contract?.write?.transfer([address as `0x${string}`, amounts?.quotient ?? 0n], {
-        account: erc20Contract.account!,
-        chain: erc20Contract.chain!,
       })
-    })
 
-    if (receipt?.status) {
-      setTxHash(receipt.transactionHash)
-      toastSuccess(
-        `${t('Transaction Submitted')}!`,
-        <ToastDescriptionWithTx txHash={receipt.transactionHash}>
-          {t('Your %symbol% has been sent to %address%', {
-            symbol: currency?.symbol,
-            address: `${address?.slice(0, 8)}...${address?.slice(-8)}`,
-          })}
-        </ToastDescriptionWithTx>,
-      )
-      // Reset form after successful transaction
-      setAmount('')
-      setAddress('')
+      if (receipt?.status) {
+        setTxHash(receipt.transactionHash)
+        toastSuccess(
+          t('Transaction Submitted'),
+          <ToastDescriptionWithTx txHash={receipt.transactionHash}>
+            {t('Sent')} {amount} {currency.symbol} {t('to')} {effectiveAddress}
+          </ToastDescriptionWithTx>,
+        )
+        // Reset form after successful transaction
+        setAmount('')
+        setAddress('')
+      }
+    } catch (error) {
+      console.error('Send failed:', error)
     }
-
-    return receipt
   }, [
     resolvedEnsAddress,
     address,
@@ -252,15 +265,7 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
 
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target
-    if (isAddress(value)) {
-      setAddress(value)
-    }
-    else if (ENS_NAME_REGEX.test(value) && resolvedEnsAddress) {
-      setAddress(resolvedEnsAddress.toString())
-    }
-    else if (ENS_NAME_REGEX.test(value) && !resolvedEnsAddress) {
-      setAddressError(t('ENS name not resolved'))
-    }
+    setAddress(value)
   }
 
   // Use debounced address for validation to avoid checking on every keystroke
@@ -401,7 +406,6 @@ export const SendAssetForm: React.FC<SendAssetFormProps> = ({ asset, onViewState
                 {addressError && <ErrorMessage>{addressError}</ErrorMessage>}
                 {resolvedEnsAddress && address && (
                   <CopyAddress account={resolvedEnsAddress} tooltipMessage={resolvedEnsAddress} enableDomainName />
-
                 )}
               </Box>
             )}
