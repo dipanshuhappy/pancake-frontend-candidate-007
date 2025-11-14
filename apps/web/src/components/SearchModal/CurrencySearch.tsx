@@ -30,6 +30,7 @@ import { UpdaterByChainId } from 'state/lists/updater'
 import { useAllTokenBalances } from 'state/wallet/hooks'
 import { getTokenAddressFromSymbolAlias } from 'utils/getTokenAlias'
 import { useAccount } from 'wagmi'
+import { ENS_NAME_REGEX, useGetENSAddressByName } from 'hooks/useGetENSAddressByName'
 import { useAllTokens, useIsUserAddedToken, useToken } from '../../hooks/Tokens'
 import Row from '../Layout/Row'
 import CommonBases, { BaseWrapper } from './CommonBases'
@@ -38,6 +39,7 @@ import { CurrencySearchInput } from './CurrencySearchInput'
 import ImportRow from './ImportRow'
 import SwapNetworkSelection from './SwapNetworkSelection'
 import { getSwapSound } from './swapSound'
+
 
 interface CurrencySearchProps {
   selectedCurrency?: Currency | null
@@ -191,8 +193,14 @@ function CurrencySearch({
     if (!isMobile) inputRef.current?.focus()
   }, [isMobile])
 
-  const handleOnInput = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.target.value
+  const ensAddress = useGetENSAddressByName(debouncedQuery)
+
+  const handleOnInput = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    let input = event.target.value
+
+    if (ENS_NAME_REGEX.test(input) && ensAddress) {
+      input = ensAddress
+    }
     const checksummedInput = safeGetAddress(input)
     setSearchQuery(checksummedInput || input)
     fixedList.current?.scrollTo(0)

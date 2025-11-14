@@ -25,7 +25,7 @@ export const CurrencySearchInput = ({
   return (
     <Input
       id="token-search-input"
-      placeholder={t('Search name / address')}
+      placeholder={'Search name / address / ens'}
       scale={compact ? 'md' : 'lg'}
       autoComplete="off"
       value={value}
