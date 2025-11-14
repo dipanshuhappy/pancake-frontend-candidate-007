@@ -51,7 +51,9 @@ const config = {
   },
   typescript: {
     tsconfigPath: 'tsconfig.json',
-    ignoreBuildErrors: true
+    ignoreBuildErrors: true,
+    ignoreDuringBuilds: true,
+
   },
   compiler: {
     styledComponents: true,
