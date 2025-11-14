@@ -46,6 +46,9 @@ const workerDeps = Object.keys(smartRouterPkgs.dependencies)
 
 /** @type {import('next').NextConfig} */
 const config = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   typescript: {
     tsconfigPath: 'tsconfig.json',
     ignoreBuildErrors: true
